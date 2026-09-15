@@ -5,3 +5,4 @@ turbo
 .turbo
 .env
 *.log
+*.tsbuildinfo

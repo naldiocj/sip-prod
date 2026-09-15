@@ -56,4 +56,5 @@ services:
 
 volumes:
   postgres_data:
+    name: sip_postgres16_data
   redis_data:
