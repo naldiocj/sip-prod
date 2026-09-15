@@ -10,10 +10,57 @@ model User {
   id                String           @id @default(cuid())
   email             String           @unique
   name              String
+  passwordHash      String
   unidadeOrganica   UnidadeOrganica? @relation(fields: [unidadeOrganicaId], references: [id])
   unidadeOrganicaId String?
+  roles             UserRole[]
+  refreshTokens     RefreshToken[]
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  key         String       @unique
+  name        String
+  parentId    String?
+  parent      Role?        @relation("RoleHierarchy", fields: [parentId], references: [id])
+  children    Role[]       @relation("RoleHierarchy")
+  permissions Permission[]
+  users       UserRole[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  roles       Role[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+  user   User   @relation(fields: [userId], references: [id])
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+}
+
+model RefreshToken {
+  id                String    @id @default(cuid())
+  userId            String
+  tokenHash         String    @unique
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  replacedByTokenId String?
+  createdAt         DateTime  @default(now())
+  user              User      @relation(fields: [userId], references: [id])
 }
 
 model UnidadeOrganica {

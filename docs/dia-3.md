@@ -22,12 +22,12 @@ O perfil `procurador` é externo e não participa na herança interna.
 
 ## Critério de conclusão
 
-- Login devolve JWT com roles e permissões efetivas.
-- Endpoints protegidos rejeitam utilizadores sem permissão.
-- `diretor_nacional` herda permissões dos níveis inferiores.
-- Testes de herança passam.
-- As palavras-passe são guardadas apenas com hash seguro e nunca em texto simples.
-- Refresh tokens usados ou revogados não podem ser reutilizados.
-- Respostas `401` e `403` são diferenciadas corretamente.
-- Os testes cobrem login inválido, token expirado, refresh rotation e acesso sem permissão.
-- Realizar um commit significativo com a mensagem `feat(auth): implement hierarchical rbac and jwt`.
+- [x] Login devolve JWT com roles e permissões efetivas.
+- [x] Endpoints protegidos rejeitam utilizadores sem permissão.
+- [x] `diretor_nacional` herda permissões dos níveis inferiores.
+- [x] Testes de herança passam.
+- [x] As palavras-passe são guardadas apenas com hash seguro e nunca em texto simples.
+- [x] Refresh tokens usados ou revogados não podem ser reutilizados.
+- [x] Respostas `401` e `403` são diferenciadas corretamente.
+- [x] Os testes cobrem login inválido, token expirado, refresh rotation e acesso sem permissão.
+- [x] Realizar um commit significativo com a mensagem `feat(auth): implement hierarchical rbac and jwt`.
