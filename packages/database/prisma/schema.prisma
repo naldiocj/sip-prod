@@ -24,3 +24,62 @@ model UnidadeOrganica {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model Processo {
+  id                   String           @id @default(cuid())
+  numeroInterno        String           @unique
+  numeroProcuradoria   String?          @unique
+  estado               String
+  origem               String
+  tipicidadeCodigo     String?
+  tipicidadeDesignacao String?
+  tipicidadeArtigoCpp  String?
+  piqueteId            String?
+  instrutorId          String?
+  unidadeActualId      String
+  dataInstauracao      DateTime
+  dataUltimaTransicao  DateTime
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  actos                ActoPiquete[]
+  pecas                PecaProcessual[]
+}
+
+model ActoPiquete {
+  id             String    @id @default(cuid())
+  tipoActoId     String
+  tipoActoCodigo String
+  piqueteId      String
+  userRegistoId  String
+  numeroActo     String    @unique
+  factos         String
+  dados          Json
+  estado         String
+  processoId     String?
+  geraProcesso   Boolean
+  dataRegisto    DateTime
+  processo       Processo? @relation(fields: [processoId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model PecaProcessual {
+  id            String    @id @default(cuid())
+  processoId    String
+  templateId    String
+  tipo          String
+  numeroOrdem   Int
+  dados         Json
+  estado        String
+  hashDocumento String?
+  pdfPath       String?
+  criadaPor     String
+  criadaEm      DateTime
+  assinadaPor   String?
+  assinadaEm    DateTime?
+  processo      Processo  @relation(fields: [processoId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([processoId, numeroOrdem])
+}
