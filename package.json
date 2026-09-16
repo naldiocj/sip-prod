@@ -10,6 +10,13 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
+    "test": "pnpm --filter @sip/api test",
+    "test:coverage": "pnpm --filter @sip/api test:coverage",
+    "test:domain": "pnpm --filter @sip/api exec vitest run src/domain/domain.spec.ts",
+    "test:auth": "pnpm --filter @sip/api exec vitest run src/auth/auth.spec.ts",
+    "validate:prisma": "bash scripts/validate-prisma-naming.sh",
+    "ci": "pnpm lint && pnpm typecheck && pnpm validate:prisma && pnpm test && pnpm test:coverage",
+    "verify:completed": "pnpm test && pnpm typecheck && pnpm lint",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {

@@ -16,8 +16,15 @@ export type UserRoleLike = {
 function buildRoleMap(roles: RoleNode[]) {
   const map = new Map<string, RoleNode>();
 
-  for (const role of roles) {
+  const visit = (role: RoleNode) => {
     map.set(role.key, role);
+    for (const child of role.children ?? []) {
+      visit(child);
+    }
+  };
+
+  for (const role of roles) {
+    visit(role);
   }
 
   return map;

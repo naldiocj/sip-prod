@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sip
+          POSTGRES_PASSWORD: sip_ci_password
+          POSTGRES_DB: sip_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sip -d sip_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Prisma naming
+        run: pnpm validate:prisma
+
+      - name: Prisma migrate
+        env:
+          DATABASE_URL: postgresql://sip:sip_ci_password@localhost:5432/sip_ci
+        run: pnpm --filter @sip/database exec prisma migrate deploy
+
+      - name: Prisma generate
+        run: pnpm --filter @sip/database generate
+
+      - name: Seed test database
+        env:
+          DATABASE_URL: postgresql://sip:sip_ci_password@localhost:5432/sip_ci
+        run: pnpm --filter @sip/database seed
+
+      - name: CI checks
+        run: pnpm run ci
+
+      - name: Build
+        run: pnpm build

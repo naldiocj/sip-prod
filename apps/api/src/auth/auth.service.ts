@@ -1,11 +1,13 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { createHash, randomUUID } from "node:crypto";
 import { compare, hash } from "bcryptjs";
-import { getEffectivePermissionsForRole, type RoleNode } from "./authorization-policy";
+import { getEffectivePermissionsForRole } from "./authorization-policy";
+import type { AuthRepository, AuthUserRecord } from "./auth.repository";
+import { AUTH_REPOSITORY } from "./auth.tokens";
 
 export type AuthUser = {
-  id: string;
+  sub: string;
   email: string;
   roles: string[];
   permissions: string[];
@@ -14,213 +16,111 @@ export type AuthUser = {
 export type LoginResponse = {
   accessToken: string;
   refreshToken: string;
-  user: {
-    id: string;
-    email: string;
-    roles: string[];
-    permissions: string[];
-  };
+  user: AuthUser;
 };
 
-const ROLE_TREE: RoleNode[] = [
-  {
-    id: "r-diretor-geral",
-    key: "diretor_geral",
-    name: "Diretor Geral",
-    parentId: null,
-    permissions: ["processo:read", "processo:write", "despacho:write", "relatorio:export"],
-    children: [
-      {
-        id: "r-diretor-nacional",
-        key: "diretor_nacional",
-        name: "Diretor Nacional",
-        parentId: "r-diretor-geral",
-        permissions: ["processo:read", "processo:write", "relatorio:export"],
-        children: [
-          {
-            id: "r-chefe-departamento",
-            key: "chefe_departamento",
-            name: "Chefe de Departamento",
-            parentId: "r-diretor-nacional",
-            permissions: ["processo:read", "despacho:write"],
-            children: [
-              {
-                id: "r-chefe-seccao",
-                key: "chefe_seccao",
-                name: "Chefe de Secção",
-                parentId: "r-chefe-departamento",
-                permissions: ["processo:read", "processo:write"],
-                children: [
-                  {
-                    id: "r-instrutor",
-                    key: "instrutor",
-                    name: "Instrutor",
-                    parentId: "r-chefe-seccao",
-                    permissions: ["peca:sign", "processo:review"],
-                    children: []
-                  },
-                  {
-                    id: "r-agente-piquete",
-                    key: "agente_piquete",
-                    name: "Agente de Piquete",
-                    parentId: "r-chefe-seccao",
-                    permissions: ["acto:register", "processo:read"],
-                    children: []
-                  }
-                ]
-              },
-              {
-                id: "r-oficial-secretaria",
-                key: "oficial_secretaria",
-                name: "Oficial de Secretaria",
-                parentId: "r-chefe-departamento",
-                permissions: ["entrada_pgr:register", "peca:write"],
-                children: []
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    id: "r-procurador",
-    key: "procurador",
-    name: "Procurador",
-    parentId: null,
-    permissions: ["processo:read", "despacho:write", "relatorio:export"],
-    children: []
-  }
-];
+const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-const USERS: Array<{ id: string; email: string; passwordHash: string; roles: string[] }> = [
-  {
-    id: "u-diretor-nacional",
-    email: "diretor.nacional@sip.local",
-    passwordHash: "$2a$10$6/0UQ3fQz3qM4jE3uYwzOeW0g2Hu6v2O3nLj9a1oj2L2fE7l6U5uK",
-    roles: ["diretor_nacional"]
-  },
-  {
-    id: "u-instrutor",
-    email: "instrutor@sip.local",
-    passwordHash: "$2a$10$6/0UQ3fQz3qM4jE3uYwzOeW0g2Hu6v2O3nLj9a1oj2L2fE7l6U5uK",
-    roles: ["instrutor"]
-  }
-];
-
-const REFRESH_TOKENS = new Map<string, { userId: string; expiresAt: number; revokedAt?: number }>();
-
-function hashToken(token: string) {
+function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly jwtService: JwtService) { }
+  constructor(
+    private readonly jwtService: JwtService,
+    @Inject(AUTH_REPOSITORY) private readonly repository: AuthRepository
+  ) { }
 
   async login(email: string, password: string): Promise<LoginResponse> {
-    const foundUser = USERS.find((user) => user.email.toLowerCase() === email.toLowerCase());
-
-    if (!foundUser) {
+    const user = await this.repository.findUserByEmail(email.trim());
+    if (!user || !(await compare(password, user.passwordHash))) {
       throw new UnauthorizedException("Credenciais inválidas.");
     }
 
-    const isValid = await compare(password, foundUser.passwordHash);
-
-    if (!isValid) {
-      throw new UnauthorizedException("Credenciais inválidas.");
-    }
-
-    const roles = foundUser.roles;
-    const permissions = roles.flatMap((roleKey) => getEffectivePermissionsForRole(roleKey, ROLE_TREE));
-    const uniquePermissions = [...new Set(permissions)];
-
-    const payload: AuthUser = {
-      id: foundUser.id,
-      email: foundUser.email,
-      roles,
-      permissions: uniquePermissions
-    };
-
-    const accessToken = await this.jwtService.signAsync(payload, { expiresIn: "15m" });
-    const refreshTokenValue = await this.jwtService.signAsync(
-      { sub: foundUser.id, type: "refresh", jti: randomUUID() },
-      { expiresIn: "7d" }
-    );
-
-    const refreshTokenHash = hashToken(refreshTokenValue);
-    REFRESH_TOKENS.set(refreshTokenHash, {
-      userId: foundUser.id,
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
-    });
+    const accessToken = await this.createAccessToken(user);
+    const refreshToken = await this.createRefreshToken(user.id, randomUUID());
 
     return {
       accessToken,
-      refreshToken: refreshTokenValue,
-      user: payload
+      refreshToken,
+      user: this.toAuthUser(user)
     };
   }
 
   async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
-    let payload: { sub: string; type?: string; jti?: string };
+    let payload: { sub?: string; type?: string; jti?: string; sessionId?: string };
 
     try {
-      payload = await this.jwtService.verifyAsync<{ sub: string; type?: string; jti?: string }>(refreshToken);
+      payload = await this.jwtService.verifyAsync<{ sub?: string; type?: string; jti?: string; sessionId?: string }>(refreshToken);
     } catch {
       throw new UnauthorizedException("Refresh token inválido ou expirado.");
     }
 
-    if (payload.type !== "refresh") {
+    if (payload.type !== "refresh" || !payload.sub || !payload.jti || !payload.sessionId) {
       throw new UnauthorizedException("Token de refresh inválido.");
     }
 
-    const tokenHash = hashToken(refreshToken);
-    const record = REFRESH_TOKENS.get(tokenHash);
+    const nextRefreshToken = await this.jwtService.signAsync(
+      { sub: payload.sub, type: "refresh", jti: randomUUID(), sessionId: payload.sessionId },
+      { expiresIn: "7d" }
+    );
+    const user = await this.repository.rotateRefreshToken({
+      userId: payload.sub,
+      sessionId: payload.sessionId,
+      previousTokenHash: hashToken(refreshToken),
+      tokenHash: hashToken(nextRefreshToken),
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS)
+    });
 
-    if (!record || record.revokedAt || record.expiresAt < Date.now()) {
+    if (!user) {
       throw new UnauthorizedException("Refresh token foi revogado ou expirou.");
     }
 
-    const user = USERS.find((entry) => entry.id === payload.sub);
-
-    if (!user) {
-      throw new UnauthorizedException("Utilizador não encontrado.");
-    }
-
-    const nextRefreshTokenValue = await this.jwtService.signAsync(
-      { sub: user.id, type: "refresh", jti: randomUUID() },
-      { expiresIn: "7d" }
-    );
-
-    const nextHash = hashToken(nextRefreshTokenValue);
-    REFRESH_TOKENS.set(nextHash, {
-      userId: user.id,
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
-    });
-    REFRESH_TOKENS.delete(tokenHash);
-
-    const permissions = user.roles.flatMap((roleKey) => getEffectivePermissionsForRole(roleKey, ROLE_TREE));
-    const accessToken = await this.jwtService.signAsync(
-      {
-        sub: user.id,
-        email: user.email,
-        roles: user.roles,
-        permissions: [...new Set(permissions)]
-      },
-      { expiresIn: "15m" }
-    );
-
     return {
-      accessToken,
-      refreshToken: nextRefreshTokenValue
+      accessToken: await this.createAccessToken(user),
+      refreshToken: nextRefreshToken
     };
   }
 
-  static getRoleTree(): RoleNode[] {
-    return ROLE_TREE;
+  async logout(refreshToken: string): Promise<void> {
+    await this.repository.revokeRefreshSession(hashToken(refreshToken));
   }
 
-  static async hashPassword(password: string) {
-    return hash(password, 10);
+  static async hashPassword(password: string): Promise<string> {
+    return hash(password, 12);
+  }
+
+  private async createAccessToken(user: AuthUserRecord): Promise<string> {
+    return this.jwtService.signAsync({ ...this.toAuthUser(user), type: "access" }, { expiresIn: "15m" });
+  }
+
+  private async createRefreshToken(userId: string, sessionId: string): Promise<string> {
+    const token = await this.jwtService.signAsync(
+      { sub: userId, type: "refresh", jti: randomUUID(), sessionId },
+      { expiresIn: "7d" }
+    );
+
+    await this.repository.saveRefreshToken({
+      userId,
+      sessionId,
+      tokenHash: hashToken(token),
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS)
+    });
+
+    return token;
+  }
+
+  private toAuthUser(user: AuthUserRecord): AuthUser {
+    const permissions = user.roleKeys.flatMap((roleKey) =>
+      getEffectivePermissionsForRole(roleKey, user.roleTree)
+    );
+
+    return {
+      sub: user.id,
+      email: user.email,
+      roles: user.roleKeys,
+      permissions: [...new Set(permissions)]
+    };
   }
 }

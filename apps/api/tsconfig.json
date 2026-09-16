@@ -11,7 +11,16 @@
     "esModuleInterop": true,
     "types": [
       "node"
-    ]
+    ],
+    "baseUrl": "..",
+    "paths": {
+      "@sip/database": [
+        "packages/database/src"
+      ],
+      "@sip/config": [
+        "packages/config/src"
+      ]
+    }
   },
   "include": [
     "src/**/*.ts"

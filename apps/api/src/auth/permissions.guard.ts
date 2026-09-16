@@ -7,12 +7,18 @@ export class PermissionsGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) { }
 
   canActivate(context: ExecutionContext): boolean {
-    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(REQUIRED_PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass()
-    ]);
+    const handler = context.getHandler?.();
+    const targetClass = context.getClass?.();
+    const targets = [handler, targetClass].filter(
+      (value): value is (() => unknown) => typeof value === "function"
+    );
+    const requiredPermissions = targets.length > 0
+      ? this.reflector.getAllAndOverride<string[]>(REQUIRED_PERMISSIONS_KEY, targets)
+      : undefined;
 
-    if (!requiredPermissions || requiredPermissions.length === 0) {
+    const requiredList = Array.isArray(requiredPermissions) ? requiredPermissions : [];
+
+    if (requiredList.length === 0) {
       return true;
     }
 
@@ -24,7 +30,7 @@ export class PermissionsGuard implements CanActivate {
     }
 
     const permissionSet = new Set(user.permissions);
-    const hasAllPermissions = requiredPermissions.every((permission) => permissionSet.has(permission));
+    const hasAllPermissions = requiredList.every((permission: string) => permissionSet.has(permission));
 
     if (!hasAllPermissions) {
       throw new ForbiddenException("Utilizador sem permissão para esta operação.");

@@ -53,6 +53,17 @@ describe("Processo", () => {
     expect(processo.estado).toBe(EstadoProcesso.EM_PROCURADORIA);
     expect(processo.numeroProcuradoria).toBe("PROC/LU/2026/00123");
   });
+  it("exige fundamento para arquivar", () => {
+    const processo = criar();
+    expect(() => processo.arquivar("curto")).toThrow(TransicaoInvalidaError);
+    processo.arquivar("Denúncia manifestamente infundada");
+    expect(processo.estado).toBe(EstadoProcesso.ARQUIVADO);
+  });
+  it("rejeita transição a partir de processo arquivado", () => {
+    const processo = criar();
+    processo.arquivar("Denúncia manifestamente infundada");
+    expect(() => processo.distribuirParaInstrutor("i1")).toThrow(TransicaoInvalidaError);
+  });
 });
 
 describe("ActoPiquete", () => {
@@ -73,6 +84,16 @@ describe("ActoPiquete", () => {
   });
   it("rejeita factos insuficientes", () => {
     expect(() => ActoPiquete.criar({ ...params, factos: "curto" })).toThrow(TransicaoInvalidaError);
+  });
+  it("não publica evento quando não gera processo", () => {
+    const acto = ActoPiquete.criar({ ...params, geraProcesso: false });
+    expect(acto.eventos).toHaveLength(0);
+  });
+  it("valida e rejeita apenas a partir de submetido", () => {
+    const acto = ActoPiquete.criar(params);
+    acto.validar();
+    expect(acto.estado).toBe(EstadoActo.VALIDADO);
+    expect(() => acto.rejeitar("fundamento suficiente")).toThrow(TransicaoInvalidaError);
   });
 });
 
@@ -98,5 +119,19 @@ describe("PecaProcessual", () => {
   it("valida tipicidade e hash", () => {
     expect(Tipicidade.criar("furto_simples", "Furto simples", "234").codigo).toBe("FURTO_SIMPLES");
     expect(() => HashDocumento.criar("a".repeat(63))).toThrow(FormatoInvalidoError);
+  });
+  it("rejeita geração sem caminho PDF", () => {
+    const peca = criar();
+    expect(() => peca.gerarPDF(HashDocumento.criar("a".repeat(64)), "  ")).toThrow(
+      TransicaoInvalidaError
+    );
+  });
+  it("não permite alterar uma peça imutável", () => {
+    const peca = criar();
+    peca.gerarPDF(HashDocumento.criar("a".repeat(64)), "/tmp/x.pdf");
+    peca.assinar("u");
+    expect(() => peca.gerarPDF(HashDocumento.criar("b".repeat(64)), "/tmp/y.pdf")).toThrow(
+      TransicaoInvalidaError
+    );
   });
 });

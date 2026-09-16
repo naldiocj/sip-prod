@@ -10,6 +10,7 @@ import { IS_PUBLIC_KEY } from "./public.decorator";
 
 export type AuthenticatedUser = {
   sub: string;
+  type: "access";
   email: string;
   roles: string[];
   permissions: string[];
@@ -23,10 +24,14 @@ export class AuthGuard implements CanActivate {
   ) { }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass()
-    ]);
+    const handler = context.getHandler?.();
+    const targetClass = context.getClass?.();
+    const targets = [handler, targetClass].filter(
+      (value): value is (() => unknown) => typeof value === "function"
+    );
+    const isPublic = targets.length > 0
+      ? this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets)
+      : false;
 
     if (isPublic) {
       return true;
@@ -43,6 +48,9 @@ export class AuthGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync<AuthenticatedUser>(token);
+      if (payload.type !== "access") {
+        throw new UnauthorizedException("Tipo de token inválido.");
+      }
       request.user = payload;
       return true;
     } catch {
