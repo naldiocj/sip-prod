@@ -7,126 +7,239 @@ datasource db {
 }
 
 model User {
-  id                String           @id @default(cuid())
-  email             String           @unique
+  id                String           @id(map: "pk_users") @default(cuid())
+  email             String           @unique(map: "uq_users_email")
   name              String
-  passwordHash      String
-  unidadeOrganica   UnidadeOrganica? @relation(fields: [unidadeOrganicaId], references: [id])
-  unidadeOrganicaId String?
+  passwordHash      String           @map("password_hash")
+  unidadeOrganica   UnidadeOrganica? @relation(fields: [unidadeOrganicaId], references: [id], map: "fk_users_unidade_organica")
+  unidadeOrganicaId String?          @map("unidade_organica_id")
   roles             UserRole[]
   refreshTokens     RefreshToken[]
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  @@map("users")
 }
 
 model Role {
-  id          String       @id @default(cuid())
-  key         String       @unique
+  id          String           @id(map: "pk_roles") @default(cuid())
+  key         String           @unique(map: "uq_roles_key")
   name        String
-  parentId    String?
-  parent      Role?        @relation("RoleHierarchy", fields: [parentId], references: [id])
-  children    Role[]       @relation("RoleHierarchy")
-  permissions Permission[]
+  parentId    String?          @map("parent_id")
+  parent      Role?            @relation("RoleHierarchy", fields: [parentId], references: [id], onDelete: SetNull, map: "fk_roles_parent")
+  children    Role[]           @relation("RoleHierarchy")
+  permissions RolePermission[]
   users       UserRole[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@map("roles")
 }
 
 model Permission {
-  id          String   @id @default(cuid())
-  key         String   @unique
+  id          String           @id(map: "pk_permissions") @default(cuid())
+  key         String           @unique(map: "uq_permissions_key")
   name        String
   description String?
-  roles       Role[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade, map: "fk_role_permissions_role")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade, map: "fk_role_permissions_permission")
+
+  @@id([roleId, permissionId], map: "pk_role_permissions")
+  @@index([permissionId], map: "idx_role_permissions_permission_id")
+  @@map("role_permissions")
 }
 
 model UserRole {
-  id     String @id @default(cuid())
-  userId String
-  roleId String
-  user   User   @relation(fields: [userId], references: [id])
-  role   Role   @relation(fields: [roleId], references: [id])
+  id     String @id(map: "pk_user_roles") @default(cuid())
+  userId String @map("user_id")
+  roleId String @map("role_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, map: "fk_user_roles_user")
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade, map: "fk_user_roles_role")
 
-  @@unique([userId, roleId])
+  @@unique([userId, roleId], map: "uq_user_roles_user_id_role_id")
+  @@index([roleId], map: "idx_user_roles_role_id")
+  @@map("user_roles")
 }
 
 model RefreshToken {
-  id                String    @id @default(cuid())
-  userId            String
-  tokenHash         String    @unique
-  expiresAt         DateTime
-  revokedAt         DateTime?
-  replacedByTokenId String?
-  createdAt         DateTime  @default(now())
-  user              User      @relation(fields: [userId], references: [id])
+  id                String    @id(map: "pk_refresh_tokens") @default(cuid())
+  userId            String    @map("user_id")
+  sessionId         String    @map("session_id")
+  tokenHash         String    @unique(map: "uq_refresh_tokens_token_hash") @map("token_hash")
+  expiresAt         DateTime  @map("expires_at")
+  revokedAt         DateTime? @map("revoked_at")
+  replacedByTokenId String?   @map("replaced_by_token_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade, map: "fk_refresh_tokens_user")
+
+  @@index([sessionId], map: "idx_refresh_tokens_session_id")
+  @@map("refresh_tokens")
 }
 
 model UnidadeOrganica {
-  id        String   @id @default(cuid())
+  id        String   @id(map: "pk_unidades_organicas") @default(cuid())
   nome      String
-  codigo    String   @unique
+  codigo    String   @unique(map: "uq_unidades_organicas_codigo")
   users     User[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("unidades_organicas")
 }
 
 model Processo {
-  id                   String           @id @default(cuid())
-  numeroInterno        String           @unique
-  numeroProcuradoria   String?          @unique
+  id                   String           @id(map: "pk_processos") @default(cuid())
+  numeroInterno        String           @unique(map: "uq_processos_numero_interno") @map("numero_interno")
+  numeroProcuradoria   String?          @unique(map: "uq_processos_numero_procuradoria") @map("numero_procuradoria")
   estado               String
   origem               String
-  tipicidadeCodigo     String?
-  tipicidadeDesignacao String?
-  tipicidadeArtigoCpp  String?
-  piqueteId            String?
-  instrutorId          String?
-  unidadeActualId      String
-  dataInstauracao      DateTime
-  dataUltimaTransicao  DateTime
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  tipicidadeCodigo     String?          @map("tipicidade_codigo")
+  tipicidadeDesignacao String?          @map("tipicidade_designacao")
+  tipicidadeArtigoCpp  String?          @map("tipicidade_artigo_cpp")
+  piqueteId            String?          @map("piquete_id")
+  instrutorId          String?          @map("instrutor_id")
+  unidadeActualId      String           @map("unidade_actual_id")
+  dataInstauracao      DateTime         @map("data_instauracao")
+  dataUltimaTransicao  DateTime         @map("data_ultima_transicao")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
   actos                ActoPiquete[]
   pecas                PecaProcessual[]
+
+  @@index([estado], map: "idx_processos_estado")
+  @@index([unidadeActualId], map: "idx_processos_unidade_actual_id")
+  @@map("processos")
 }
 
 model ActoPiquete {
-  id             String    @id @default(cuid())
-  tipoActoId     String
-  tipoActoCodigo String
-  piqueteId      String
-  userRegistoId  String
-  numeroActo     String    @unique
+  id             String    @id(map: "pk_actos_piquete") @default(cuid())
+  tipoActoId     String    @map("tipo_acto_id")
+  tipoActoCodigo String    @map("tipo_acto_codigo")
+  piqueteId      String    @map("piquete_id")
+  userRegistoId  String    @map("user_registo_id")
+  numeroActo     String    @unique(map: "uq_actos_piquete_numero_acto") @map("numero_acto")
   factos         String
   dados          Json
   estado         String
-  processoId     String?
-  geraProcesso   Boolean
-  dataRegisto    DateTime
-  processo       Processo? @relation(fields: [processoId], references: [id])
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  processoId     String?   @map("processo_id")
+  geraProcesso   Boolean   @map("gera_processo")
+  dataRegisto    DateTime  @map("data_registo")
+  processo       Processo? @relation(fields: [processoId], references: [id], onDelete: SetNull, map: "fk_actos_piquete_processo")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  tipoActo       TipoActo  @relation(fields: [tipoActoId], references: [id])
+
+  @@index([piqueteId], map: "idx_actos_piquete_piquete_id")
+  @@index([estado], map: "idx_actos_piquete_estado")
+  @@index([dataRegisto], map: "idx_actos_piquete_data_registo")
+  @@map("actos_piquete")
 }
 
 model PecaProcessual {
-  id            String    @id @default(cuid())
-  processoId    String
-  templateId    String
+  id            String    @id(map: "pk_pecas_processuais") @default(cuid())
+  processoId    String    @map("processo_id")
+  templateId    String    @map("template_id")
   tipo          String
-  numeroOrdem   Int
+  numeroOrdem   Int       @map("numero_ordem")
   dados         Json
   estado        String
-  hashDocumento String?
-  pdfPath       String?
-  criadaPor     String
-  criadaEm      DateTime
-  assinadaPor   String?
-  assinadaEm    DateTime?
-  processo      Processo  @relation(fields: [processoId], references: [id])
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  hashDocumento String?   @map("hash_documento")
+  pdfPath       String?   @map("pdf_path")
+  criadaPor     String    @map("criada_por")
+  criadaEm      DateTime  @map("criada_em")
+  assinadaPor   String?   @map("assinada_por")
+  assinadaEm    DateTime? @map("assinada_em")
+  processo      Processo  @relation(fields: [processoId], references: [id], onDelete: Cascade, map: "fk_pecas_processuais_processo")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  @@unique([processoId, numeroOrdem])
+  @@unique([processoId, numeroOrdem], map: "uq_pecas_processuais_processo_id_numero_ordem")
+  @@index([processoId], map: "idx_pecas_processuais_processo_id")
+  @@map("pecas_processuais")
+}
+
+model TipoActo {
+  id           String        @id(map: "pk_tipos_atos") @default(cuid())
+  codigo       String        @unique(map: "uq_tipos_atos_codigo")
+  nome         String
+  activo       Boolean       @default(true)
+  geraProcesso Boolean       @default(false) @map("gera_processo")
+  campos       Json          @map("campos")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  actos        ActoPiquete[]
+
+  @@map("tipos_atos")
+}
+
+model SequenciaNumeracao {
+  id           String   @id(map: "pk_sequencias_numeracao") @default(cuid())
+  unidade      String   @map("unidade")
+  tipo         String   @map("tipo")
+  ano          Int
+  ultimoNumero Int      @default(0) @map("ultimo_numero")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([unidade, tipo, ano], map: "uq_sequencias_unidade_tipo_ano")
+  @@map("sequencias_numeracao")
+}
+
+model IdempotencyKey {
+  id             String   @id(map: "pk_idempotency_keys") @default(cuid())
+  chave          String   @unique(map: "uq_idempotency_keys_chave")
+  userId         String   @map("user_id")
+  endpoint       String   @map("endpoint")
+  requestHash    String   @map("request_hash")
+  responseBody   Json     @map("response_body")
+  responseStatus Int      @map("response_status")
+  expiresAt      DateTime @map("expires_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([userId], map: "idx_idempotency_keys_user_id")
+  @@index([expiresAt], map: "idx_idempotency_keys_expires_at")
+  @@map("idempotency_keys")
+}
+
+model OutboxEvent {
+  id            String    @id(map: "pk_outbox_events") @default(cuid())
+  eventName     String    @map("event_name")
+  payload       Json      @map("payload")
+  aggregateId   String    @map("aggregate_id")
+  aggregateType String    @map("aggregate_type")
+  processado    Boolean   @default(false) @map("processado")
+  tentativas    Int       @default(0) @map("tentativas")
+  ultimoErro    String?   @map("ultimo_erro")
+  processadoEm  DateTime? @map("processado_em")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([processado, createdAt], map: "idx_outbox_processado_created")
+  @@map("outbox_events")
+}
+
+model AuditLog {
+  id          String   @id(map: "pk_audit_logs") @default(cuid())
+  userId      String   @map("user_id")
+  accao       String   @map("accao")
+  recursoTipo String   @map("recurso_tipo")
+  recursoId   String   @map("recurso_id")
+  dadosAntes  Json?    @map("dados_antes")
+  dadosDepois Json?    @map("dados_depois")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt], map: "idx_audit_log_user_created")
+  @@index([recursoTipo, recursoId], map: "idx_audit_log_recurso")
+  @@map("audit_log")
 }

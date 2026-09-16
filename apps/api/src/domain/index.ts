@@ -1,6 +1,8 @@
 export * from "./entities/acto-piquete.entity";
 export * from "./entities/peca-processual.entity";
 export * from "./entities/processo.entity";
+export * from "./entities/tipo-acto.entity";
+export * from "./entities/sequencia-numeracao.entity";
 export * from "./enums/estado-acto.enum";
 export * from "./enums/estado-peca.enum";
 export * from "./enums/estado-processo.enum";
@@ -14,6 +16,7 @@ export * from "./events/processo-instaurado.event";
 export * from "./repositories/acto-piquete.repository";
 export * from "./repositories/peca-processual.repository";
 export * from "./repositories/processo.repository";
+export * from "./repositories/unidade-organica.repository";
 export * from "./value-objects/hash-documento.vo";
 export * from "./value-objects/numero-processo.vo";
 export * from "./value-objects/tipicidade.vo";
